@@ -14,4 +14,4 @@
 #SYSTYPE="libs"
 #SYSTYPE="hydra"
 #SYSTYPE="bwforcluster"
-
+SYSTYPE="pegasuscluster-gcc"

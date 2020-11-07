@@ -1,0 +1,8 @@
+GSL_INCL   = -I$(gsl_home)/include
+GSL_LIBS   = -L$(gsl_home)/lib
+FFTW_INCL  = -I$(fftw3_home)/include
+FFTW_LIBS  = -L$(fftw3_home)/lib
+HDF5_INCL  = -I$(hdf5_home)/include
+HDF5_LIBS  = -L$(hdf5_home)/lib  
+HWLOC_INCL = -I$(HWLOC_ROOT)/include
+HWLOC_LIBS = -L$(HWLOC_ROOT)/lib

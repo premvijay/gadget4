@@ -105,6 +105,12 @@ RESULT     := $(shell SRC_DIR=$(SRC_DIR) BUILD_DIR=$(BUILD_DIR) ./buildsystem/gi
 ##########################
 #define available Systems#
 ##########################
+
+ifeq ($(SYSTYPE),"pegasuscluster-gcc")
+include buildsystem/Makefile.pegasus.libs
+include buildsystem/Makefile.comp.gcc
+endif
+
 ifeq ($(SYSTYPE),"Generic-gcc")
 include buildsystem/Makefile.gen.libs
 include buildsystem/Makefile.comp.gcc
@@ -201,7 +207,6 @@ ifeq ($(SYSTYPE),"bwforcluster")
 include buildsystem/Makefile.comp.gcc
 include buildsystem/Makefile.path.bwforcluster
 endif
-
 
 ifndef LINKER
 LINKER = $(CPP)
