@@ -97,7 +97,6 @@ struct global_data_all_processes : public parameters
   double InitGasU;         /**< the same, but converted to thermal energy per unit mass */
   double MinEgySpec;       /**< the minimum allowed temperature expressed as energy per unit mass */
 
-  int FlagICsContainedEntropy;
 
   /* some force counters  */
 
@@ -346,6 +345,11 @@ struct global_data_all_processes : public parameters
 
 #ifdef CREATE_GRID
   int GridSize;
+#endif
+
+#ifdef EXTERNALGRAVITY_STATICHQ
+  double A_StaticHQHalo;
+  double Mass_StaticHQHalo;
 #endif
 
   void set_cosmo_factors_for_current_time(void);

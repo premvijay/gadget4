@@ -31,7 +31,7 @@ SELFGRAVITY                                   # switch to enable self-gravity of
 #EXTRA_HIGH_EWALD_ACCURACY                    # this uses third-order instead of second-order Taylor expansion to interpolate Ewald corrections from table 
 #ALLOW_DIRECT_SUMMATION                       # allows calculation of direct summation gravity force if only a tiny number of particles as active 
 #EXTERNALGRAVITY                              # switches on inclusion of external gravitational potential
- 
+#EXTERNALGRAVITY_STATICHQ                     # example for a simple external potential due to a Hernquist halo
 
 #--------------------------------------- TreePM Options
 
@@ -109,6 +109,7 @@ DOUBLEPRECISION=1                             # if activated and set to 1, use d
 
 #---------------------------------------- Output/Input options
 
+INITIAL_CONDITIONS_CONTAIN_ENTROPY
 #OUTPUT_VELOCITY_GRADIENT                     # output velocity gradients
 #OUTPUT_PRESSURE                              # output gas pressure   
 #OUTPUT_ENTROPY                               # output gas entropy

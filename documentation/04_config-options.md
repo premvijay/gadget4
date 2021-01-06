@@ -350,6 +350,13 @@ and/or parameters what this external field is.
 
 -------
 
+**EXTERNALGRAVITY_STATICHQ**
+
+Activates a simple external potential due to a Hernquist dark matter
+halo, with parameters specified in the parameterfile.
+
+-------
+
 
 TreePM Options                                             {#treepm}
 ==============
@@ -597,6 +604,12 @@ Outputs also density computed as in the standard SPH pressure-entropy
 formulation. This is only useful if `PRESSURE_ENTROPY_SPH` is used.
 
 -------
+
+**INITIAL_CONDITIONS_CONTAIN_ENTROPY**
+
+The intial conditions file contains entropy instead of the thermal energy.
+
+------
 
 **GAMMA** = 1.4
 
@@ -870,7 +883,6 @@ you need to increase `NUMBER_OF_MPI_LISTENERS_PER_NODE`.
 
 Output/Input options                                       {#io}
 ====================
-
 
 **POWERSPEC_ON_OUTPUT**
 
