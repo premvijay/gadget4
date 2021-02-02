@@ -111,6 +111,11 @@ include buildsystem/Makefile.pegasus.libs
 include buildsystem/Makefile.comp.gcc
 endif
 
+ifeq ($(SYSTYPE),"pegasuscluster-intel")
+include buildsystem/Makefile.pegasus.libs
+include buildsystem/Makefile.comp.gcc-paranoia
+endif
+
 ifeq ($(SYSTYPE),"Generic-gcc")
 include buildsystem/Makefile.gen.libs
 include buildsystem/Makefile.comp.gcc

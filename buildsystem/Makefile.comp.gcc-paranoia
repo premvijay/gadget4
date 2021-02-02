@@ -1,4 +1,4 @@
-CPP      =  mpicxx -std=c++11 -Wwrite-strings -Wredundant-decls -Woverloaded-virtual -Wcast-qual -Wcast-align -Wpointer-arith -Wmissing-declarations # sets the C++-compiler
+CPP      =  CC=icc CXX=icpc FC=ifort mpicxx -std=c++11 -cxx=icpc -Wwrite-strings -Wredundant-decls -Woverloaded-virtual -Wcast-qual -Wcast-align -Wpointer-arith -Wmissing-declarations # sets the C++-compiler
 OPTIMIZE =    -g -Wall -W -O3 -march=native
 
 # -fopenmp
