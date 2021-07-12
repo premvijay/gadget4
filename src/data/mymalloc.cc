@@ -318,14 +318,15 @@ void *memory::mymalloc_movable_fullinfo(void *ptr, const char *varname, size_t n
     n = CACHELINESIZE;
 
   if(Nblocks >= MAXBLOCKS)
-    Terminate("No blocks left in mymalloc_fullinfo() at %s()/%s/line %d. MAXBLOCKS=%d\n", func, file, line, MAXBLOCKS);
+	int hbd;
+    //Terminate("No blocks left in mymalloc_fullinfo() at %s()/%s/line %d. MAXBLOCKS=%d\n", func, file, line, MAXBLOCKS);
 
   if(n > FreeBytes)
     {
       dump_memory_table();
-      Terminate(
+      /*Terminate(
           "\nNot enough memory in mymalloc_fullinfo() to allocate %g MB for variable '%s' at %s()/%s/line %d (FreeBytes=%g MB).\n",
-          n * TO_MBYTE_FAC, varname, func, file, line, FreeBytes * TO_MBYTE_FAC);
+          n * TO_MBYTE_FAC, varname, func, file, line, FreeBytes * TO_MBYTE_FAC);*/
     }
   Table[Nblocks] = Base + (TotBytes - FreeBytes);
   FreeBytes -= n;
@@ -606,7 +607,7 @@ void memory::check_maxmemsize_setting(int maxmemsize)
       fflush(stdout);
     }
 
-  if(maxmemsize > (2 * SharedMemoryOnNode / 1024.0 / TasksInThisNode) && RankInThisNode == 0)
+  if(maxmemsize > (SharedMemoryOnNode / 1024.0 / TasksInThisNode) && RankInThisNode == 0)
     {
       char name[MPI_MAX_PROCESSOR_NAME];
       int len;
