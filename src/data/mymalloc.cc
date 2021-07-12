@@ -606,7 +606,7 @@ void memory::check_maxmemsize_setting(int maxmemsize)
       fflush(stdout);
     }
 
-  if(maxmemsize > (2 * SharedMemoryOnNode / 1024.0 / TasksInThisNode) && RankInThisNode == 0)
+  if(maxmemsize > (SharedMemoryOnNode / 1024.0 / TasksInThisNode) && RankInThisNode == 0)
     {
       char name[MPI_MAX_PROCESSOR_NAME];
       int len;
