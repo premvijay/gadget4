@@ -172,11 +172,11 @@ void sim::run(void)
         {
           mpi_printf("\nFinal time=%g reached. Simulation ends.\n", All.TimeMax);
 
-          if(All.Ti_lastoutput != All.Ti_Current) /* make a snapshot at the final time in case none has been produced at this time */
+          /* make a snapshot at the final time in case none has been produced at this time yet */
+          if(All.Ti_lastoutput != All.Ti_Current)
             {
-              snap_io Snap(&Sp, Communicator, All.SnapFormat); /* get an I/O object */
-              /* this snapshot will be overwritten if All.TimeMax is increased and the run is continued */
-              Snap.write_snapshot(All.SnapshotFileCount++, NORMAL_SNAPSHOT);
+              All.Ti_nextoutput = All.Ti_Current;
+              create_snapshot_if_desired();
             }
 
           break;
@@ -680,9 +680,12 @@ void sim::create_snapshot_if_desired(void)
 #endif
 
           {
+#ifdef MERGERTREE
             MergerTree.Ntrees = 0;
             lightcone_particle_io Lcone(&Lp, &LightCone, &MergerTree, Communicator, All.SnapFormat); /* get an I/O object */
-
+#else
+        lightcone_particle_io Lcone(&Lp, &LightCone, Communicator, All.SnapFormat); /* get an I/O object */
+#endif
             long long NumLP_tot = Lp.NumPart;
             MPI_Allreduce(MPI_IN_PLACE, &NumLP_tot, 1, MPI_LONG_LONG, MPI_SUM, Communicator);
             mpi_printf("\nLIGHTCONE: writing particle lightcone conesnap files #%d ... (NumLP_tot = %lld)\n", All.LightconeFileCount,
