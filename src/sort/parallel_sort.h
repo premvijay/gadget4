@@ -456,10 +456,16 @@ inline double mycxxsort_parallel(T *begin, T *end, Comp comp, MPI_Comm comm)
       /* At this point we have found all the elements corresponding to the desired split points */
       /* we can now go ahead and determine how many elements of the local CPU have to go to each other CPU */
 
-      size_t *send_count  = (size_t *)Mem.mymalloc("send_count", Local_NTask * sizeof(size_t));
-      size_t *recv_count  = (size_t *)Mem.mymalloc("recv_count", Local_NTask * sizeof(size_t));
-      size_t *send_offset = (size_t *)Mem.mymalloc("send_offset", Local_NTask * sizeof(size_t));
-      size_t *recv_offset = (size_t *)Mem.mymalloc("recv_offset", Local_NTask * sizeof(size_t));
+      if(nmemb * size > (1LL << 31))
+        Terminate("currently, local data must be smaller than 2 GB");
+      /* note: to restrict this limitation, the send/recv count arrays have to made 64-bit,
+       * and the MPI data exchange though MPI_Alltoall has to be modified such that buffers > 2 GB become possible
+       */
+
+      int *send_count  = (int *)Mem.mymalloc("send_count", Local_NTask * sizeof(int));
+      int *recv_count  = (int *)Mem.mymalloc("recv_count", Local_NTask * sizeof(int));
+      int *send_offset = (int *)Mem.mymalloc("send_offset", Local_NTask * sizeof(int));
+      int *recv_offset = (int *)Mem.mymalloc("recv_offset", Local_NTask * sizeof(int));
 
       for(int i = 0; i < Local_NTask; i++)
         send_count[i] = 0;
@@ -486,7 +492,7 @@ inline double mycxxsort_parallel(T *begin, T *end, Comp comp, MPI_Comm comm)
           send_count[target]++;
         }
 
-      MPI_Alltoall(send_count, sizeof(size_t), MPI_BYTE, recv_count, sizeof(size_t), MPI_BYTE, MPI_CommLocal);
+      MPI_Alltoall(send_count, 1, MPI_INT, recv_count, 1, MPI_INT, MPI_CommLocal);
 
       size_t nimport = 0;
 
@@ -518,7 +524,7 @@ inline double mycxxsort_parallel(T *begin, T *end, Comp comp, MPI_Comm comm)
       T *basetmp = (T *)Mem.mymalloc("basetmp", nmemb * size);
 
       /* exchange the data */
-      myMPI_Alltoallv(begin, send_count, send_offset, basetmp, recv_count, recv_offset, sizeof(char), 1, MPI_CommLocal);
+      MPI_Alltoallv(begin, send_count, send_offset, MPI_BYTE, basetmp, recv_count, recv_offset, MPI_BYTE, MPI_CommLocal);
 
       memcpy(static_cast<void *>(begin), static_cast<void *>(basetmp), nmemb * size);
       Mem.myfree(basetmp);
