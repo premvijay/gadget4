@@ -12,6 +12,8 @@
 #ifndef SHAREDMEM_H
 #define SHAREDMEM_H
 
+#include "gadgetconfig.h"
+
 #include <hdf5.h>
 #include <mpi.h>
 #include <stdio.h>
@@ -63,6 +65,10 @@ class shmem
   MPI_Win SharedMemWin;
 
   void **SharedMemBaseAddr;
+
+#if defined(ALLOCATE_SHARED_MEMORY_VIA_POSIX) || !defined(OLDSTYLE_SHARED_MEMORY_ALLOCATION)
+  char **SharedMemBaseAddrRaw;
+#endif
 
   char *TableData;
   char *EwaldData;

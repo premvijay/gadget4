@@ -224,6 +224,7 @@ int main(int argc, char **argv)
     {
       restart Restart{Sim.Communicator};
       Restart.load(&Sim);
+      All.RestartFlag = RST_RESUME;  // prevent that this is overwritten by All.RestartFlag in restart set
     }
   else
     {
@@ -233,9 +234,10 @@ int main(int argc, char **argv)
       if(All.RestartFlag != RST_BEGIN && All.RestartFlag != RST_RESUME && restartSnapNum >= 0)
         {
           if(All.NumFilesPerSnapshot > 1)
-            sprintf(fname, "%s/snapdir_%03d/%s_%03d", All.OutputDir, restartSnapNum, All.SnapshotFileBase, restartSnapNum);
+            snprintf(fname, MAXLEN_PATH_EXTRA, "%s/snapdir_%03d/%s_%03d", All.OutputDir, restartSnapNum, All.SnapshotFileBase,
+                     restartSnapNum);
           else
-            sprintf(fname, "%s%s_%03d", All.OutputDir, All.SnapshotFileBase, restartSnapNum);
+            snprintf(fname, MAXLEN_PATH_EXTRA, "%s%s_%03d", All.OutputDir, All.SnapshotFileBase, restartSnapNum);
         }
       else
         {

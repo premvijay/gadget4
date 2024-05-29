@@ -9,8 +9,9 @@
  *  \brief initial set-up of a simulation run
  */
 
-#include "compiler-command-line-args.h"
 #include "gadgetconfig.h"
+
+#include "compiler-command-line-args.h"
 
 #include <hdf5.h>
 #include <math.h>
@@ -172,7 +173,30 @@ void sim::begrun1(const char *parameterFile)
   if(All.OutputListOn)
     All.read_outputlist(All.OutputListFilename);
   else
-    All.OutputListLength = 0;
+    {
+      All.OutputListLength = 0;
+#ifndef OUTPUT_NON_SYNCHRONIZED_ALLOWED
+      if(ThisTask == 0)
+        {
+          if(All.ComovingIntegrationOn)
+            {
+              if(log(All.TimeBetSnapshot) < All.MaxSizeTimestep)
+                Terminate(
+                    "\nYou have set log(TimeBetSnapshot)=%g < MaxSizeTimestep=%g, which may lead to missed outputs. You may want to "
+                    "change this.\n",
+                    log(All.TimeBetSnapshot), All.MaxSizeTimestep);
+            }
+          else
+            {
+              if(All.TimeBetSnapshot < All.MaxSizeTimestep)
+                Terminate(
+                    "\nYou have set TimeBetSnapshot=%g < MaxSizeTimestep=%g, which may lead to missed outputs. You may want to change "
+                    "this.\n",
+                    log(All.TimeBetSnapshot), All.MaxSizeTimestep);
+            }
+        }
+#endif
+    }
 
   All.write_used_parameters(All.OutputDir, "parameters-usedvalues");
 
@@ -262,7 +286,7 @@ void sim::begrun1(const char *parameterFile)
 void sim::begrun2(void)
 {
   char contfname[MAXLEN_PATH_EXTRA];
-  sprintf(contfname, "%scont", All.OutputDir);
+  snprintf(contfname, MAXLEN_PATH_EXTRA, "%scont", All.OutputDir);
   unlink(contfname);
 
   if(All.RestartFlag != RST_BEGIN && All.RestartFlag != RST_RESUME && All.RestartFlag != RST_STARTFROMSNAP)
@@ -295,6 +319,9 @@ void sim::begrun2(void)
   if(LightCone.lightcone_massmap_report_boundaries())
     endrun();
 #endif
+  if(LightCone.lightcone_init_boxlist())
+    endrun();
+
   double linklength = 0;
 
 #ifdef FOF
@@ -350,6 +377,8 @@ void sim::set_units(void)
 
   if(All.ComovingIntegrationOn)
     {
+      All.OmegaCurvature = 1.0 - (All.Omega0 + All.OmegaLambda);
+
       /* check whether the supplied value of All.Hubble makes sense */
       if(All.HubbleParam != 1.0)
         {

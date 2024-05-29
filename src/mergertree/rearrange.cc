@@ -98,6 +98,10 @@ void sim::rearrange_lightcone(int argc, char **argv)
     endrun();
 #endif
 
+  if(LightCone.lightcone_init_boxlist())
+    endrun();
+
+
   double linklength = 0;
   LightCone.lightcone_init_intposconverter(linklength);
 
@@ -276,16 +280,12 @@ void sim::rearrange_fill_treetable(partset &Tp)
       Send_count[target_task]++;
     }
 
-  MPI_Alltoall(Send_count, 1, MPI_INT, Recv_count, 1, MPI_INT, Communicator);
+  myMPI_Alltoall(Send_count, 1, MPI_INT, Recv_count, 1, MPI_INT, Communicator);
 
-  int nexport = 0, nimport = 0;
   Send_offset[0] = 0;
 
   for(int j = 0; j < NTask; j++)
     {
-      nexport += Send_count[j];
-      nimport += Recv_count[j];
-
       if(j > 0)
         Send_offset[j] = Send_offset[j - 1] + Send_count[j - 1];
     }
@@ -304,9 +304,9 @@ void sim::rearrange_fill_treetable(partset &Tp)
             {
               long long *treeid_tmp = (long long *)Mem.mymalloc("treeid_tmp", sizeof(long long) * Recv_count[recvTask]);
 
-              MPI_Sendrecv(&TreeID_list[Send_offset[recvTask]], Send_count[recvTask] * sizeof(long long), MPI_BYTE, recvTask,
-                           TAG_DENS_A, treeid_tmp, Recv_count[recvTask] * sizeof(long long), MPI_BYTE, recvTask, TAG_DENS_A,
-                           Communicator, MPI_STATUS_IGNORE);
+              myMPI_Sendrecv(&TreeID_list[Send_offset[recvTask]], Send_count[recvTask] * sizeof(long long), MPI_BYTE, recvTask,
+                             TAG_DENS_A, treeid_tmp, Recv_count[recvTask] * sizeof(long long), MPI_BYTE, recvTask, TAG_DENS_A,
+                             Communicator, MPI_STATUS_IGNORE);
 
               for(int i = 0; i < Recv_count[recvTask]; i++)
                 {

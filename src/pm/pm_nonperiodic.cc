@@ -195,7 +195,11 @@ void pm_nonperiodic::pm_init_regionsize(void)
         }
       else
         {
+#if defined(RANDOMIZE_DOMAINCENTER_TYPES) || defined(PLACEHIGHRESREGION)
           blocksize = Sp->PlacingBlocksize;
+#else
+          Terminate("we should not get here");
+#endif
         }
 
       mpi_printf(
@@ -224,8 +228,12 @@ void pm_nonperiodic::pm_init_regionsize(void)
             }
           else
             {
+#if defined(RANDOMIZE_DOMAINCENTER_TYPES) || defined(PLACEHIGHRESREGION)
               left  = (Sp->ReferenceIntPos[HIGH_MESH][i] + Sp->Xmintot[HIGH_MESH][i]) & Sp->PlacingMask;
               right = left + Sp->PlacingBlocksize;
+#else
+              Terminate("we should not get here");
+#endif
             }
 
           Sp->Xmintot[mesh][i] = left - Sp->ReferenceIntPos[mesh][i];
@@ -311,7 +319,7 @@ void pm_nonperiodic::pm_init_nonperiodic(simparticles *Sp_ptr)
 #ifndef FFT_COLUMN_BASED
   int stride = GRIDz;
 #else
-  int stride    = 1;
+  int stride = 1;
 #endif
 
   myplan.forward_plan_zdir = FFTW(plan_many_dft_r2c)(1, ndim, 1, rhogrid, 0, 1, GRID2, (fft_complex *)forcegrid, 0, 1, GRIDz,
@@ -575,7 +583,7 @@ void pm_nonperiodic::pmforce_nonperiodic_zoom_optimized_prepare_density(int grnr
     rhogrid[ii] = 0;
 
   /* exchange data and add contributions to the local mesh-path */
-  MPI_Alltoall(localfield_sendcount, sizeof(size_t), MPI_BYTE, localfield_recvcount, sizeof(size_t), MPI_BYTE, Communicator);
+  myMPI_Alltoall(localfield_sendcount, sizeof(size_t), MPI_BYTE, localfield_recvcount, sizeof(size_t), MPI_BYTE, Communicator);
 
   for(int level = 0; level < (1 << PTask); level++) /* note: for level=0, target is the same task */
     {
@@ -863,7 +871,7 @@ void pm_nonperiodic::pmforce_nonperiodic_uniform_optimized_prepare_density(int g
       Sndpm_offset[ind] = Sndpm_offset[ind_prev] + Sndpm_count[ind_prev];
     }
 
-  MPI_Alltoall(Sndpm_count, sizeof(size_t), MPI_BYTE, Rcvpm_count, sizeof(size_t), MPI_BYTE, Communicator);
+  myMPI_Alltoall(Sndpm_count, sizeof(size_t), MPI_BYTE, Rcvpm_count, sizeof(size_t), MPI_BYTE, Communicator);
 
   nimport = 0, nexport = 0, Rcvpm_offset[0] = 0, Sndpm_offset[0] = 0;
   for(int j = 0; j < NTask; j++)

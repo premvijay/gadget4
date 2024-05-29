@@ -97,7 +97,6 @@ struct global_data_all_processes : public parameters
   double InitGasU;         /**< the same, but converted to thermal energy per unit mass */
   double MinEgySpec;       /**< the minimum allowed temperature expressed as energy per unit mass */
 
-
   /* some force counters  */
 
   long long TotNumOfForces;     /**< counts total number of force computations  */
@@ -133,10 +132,11 @@ struct global_data_all_processes : public parameters
 
   /* Cosmology */
 
-  double Hubble;      /**< Hubble-constant in internal units */
-  double Omega0;      /**< matter density in units of the critical density (at z=0) */
-  double OmegaLambda; /**< vaccum energy density relative to crictical density (at z=0) */
-  double OmegaBaryon; /**< baryon density in units of the critical density (at z=0) */
+  double Hubble;         /**< Hubble-constant in internal units */
+  double Omega0;         /**< matter density in units of the critical density (at z=0) */
+  double OmegaLambda;    /**< vaccum energy density relative to crictical density (at z=0) */
+  double OmegaBaryon;    /**< baryon density in units of the critical density (at z=0) */
+  double OmegaCurvature; /**< curvature relative to crictical density (at z=0) */
   double HubbleParam; /**< little `h', i.e. can be used to scale unit system to absorb uncertain value of Hubble constant.  Only needed
                        * to get absolute physical values for cooling physics
                        */
@@ -289,6 +289,10 @@ struct global_data_all_processes : public parameters
 #ifdef LIGHTCONE_PARTICLES
   char LightConeDefinitionFile[MAXLEN_PATH];
   int LightconeFileCount;
+
+#ifdef LIGHTCONE_MULTIPLE_ORIGINS
+  char LightConeOriginsFile[MAXLEN_PATH];
+#endif
 #endif
 
 #ifdef LIGHTCONE_MASSMAPS

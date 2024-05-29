@@ -12,7 +12,12 @@
 #ifndef IO_STREAMCOUNT_H
 #define IO_STREAMCOUNT_H
 
+#include "gadgetconfig.h"
+
 #include <errno.h>
+#include <string.h>
+
+#include "../data/macros.h"
 
 class io_streamcount
 {

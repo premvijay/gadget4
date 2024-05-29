@@ -180,6 +180,10 @@
 #undef DEBUG_ENABLE_FPU_EXCEPTIONS
 #endif
 
+#if !defined(__linux__) && !defined(OLDSTYLE_SHARED_MEMORY_ALLOCATION)
+#define OLDSTYLE_SHARED_MEMORY_ALLOCATION
+#endif
+
 #if defined(HOST_MEMORY_REPORTING) && !defined(__linux__)
 #warning "HOST_MEMORY_REPORTING only works under Linux."
 #undef HOST_MEMORY_REPORTING
@@ -227,6 +231,10 @@
 
 #if defined(PMGRID) && defined(HIERARCHICAL_GRAVITY) && !defined(TREEPM_NOTIMESPLIT)
 #error "If PMGRID is used together with HIERARCHICAL_GRAVITY, you also need to use TREEPM_NOTIMESPLIT"
+#endif
+
+#if defined(OUTPUT_NON_SYNCHRONIZED_ALLOWED) && defined(FOF)
+#error "if OUTPUT_NON_SYNCHRONIZED_ALLOWED is activated, FOF is currently not supported"
 #endif
 
 #if defined(PLACEHIGHRESREGION) && !defined(RANDOMIZE_DOMAINCENTER)
@@ -280,6 +288,14 @@
 
 #if defined(EXTERNALGRAVITY_STATICHQ) && !defined(EXTERNALGRAVITY)
 #error "EXTERNALGRAVITY_STATICHQ only works when EXTERNALGRAVITY is activated"
+#endif
+
+#if defined(LIGHTCONE_MULTIPLE_ORIGINS) && defined(LIGHTCONE_PARTICLES_GROUPS)
+#error "Presently, the option LIGHTCONE_MULTIPLE_ORIGINS cannot be used yet together with LIGHTCONE_PARTICLES_GROUPS"
+#endif
+
+#if defined(LIGHTCONE_MULTIPLE_ORIGINS) && defined(LIGHTCONE_MASSMAPS)
+#error "Presently, the option LIGHTCONE_MULTIPLE_ORIGINS cannot be used yet together with LIGHTCONE_MASSMAPS"
 #endif
 
 #ifndef ASMTH

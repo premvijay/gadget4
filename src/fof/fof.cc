@@ -14,6 +14,7 @@
 #ifdef FOF
 
 #include <mpi.h>
+
 #include <algorithm>
 #include <climits>
 #include <cmath>
@@ -68,7 +69,7 @@ void fof<partset>::fof_fof(int num, const char *grpcat_basename, const char *grp
   Tp->DistanceOrigin = (double *)Mem.mymalloc("DistanceOrigin", Tp->NumPart * sizeof(double));
 #endif
 
-  Tp->MinID     = (MyIDStorage *)Mem.mymalloc("MinID", Tp->NumPart * sizeof(MyIDStorage));  // smallest particle ID withing FOF group
+  Tp->MinID     = (MyIDStorage *)Mem.mymalloc("MinID", Tp->NumPart * sizeof(MyIDStorage));  // smallest particle ID within FOF group
   Tp->MinIDTask = (int *)Mem.mymalloc("MinIDTask", Tp->NumPart * sizeof(int));              // processor on which this ID is stored
   Tp->Head = (int *)Mem.mymalloc("Head", Tp->NumPart * sizeof(int));  // first particle in chaining list if local FOF group segment
   Tp->Next = (int *)Mem.mymalloc("Next", Tp->NumPart * sizeof(int));  // next particle in chaining list
@@ -76,14 +77,34 @@ void fof<partset>::fof_fof(int num, const char *grpcat_basename, const char *grp
   Tp->Len  = (int *)Mem.mymalloc("Len", Tp->NumPart * sizeof(int));  // length of local FOF group segment (note: 32 bit enough even for
                                                                      // huge groups because they are split across processors)
 
+  int *numpart_list = (int *)Mem.mymalloc("numpart_list", NTask * sizeof(int));
+
+  MPI_Allgather(&Tp->NumPart, 1, MPI_INT, numpart_list, 1, MPI_INT, Communicator);
+
+  long long NumPartTot = 0;
+  for(int i = 0; i < NTask; i++)
+    NumPartTot += numpart_list[i];
+
+  mpi_printf("FOF: NumPartTot=%lld\n", NumPartTot);
+
+  if(NumPartTot > (long long)ID_MAX)
+    Terminate("The chosen ID data type is not sufficiently big to store unique IDs for NumPartTot=%lld particles\n", NumPartTot);
+
+  MyIDType id = 0;
+  for(int i = 0; i < ThisTask; i++)
+    id += numpart_list[i];
+
+  Mem.myfree(numpart_list);
+
   /* initialize link-lists, each particle is in a group of its own initially */
   for(int i = 0; i < Tp->NumPart; i++)
     {
       Tp->Head[i] = Tp->Tail[i] = i;
       Tp->Len[i]                = 1;
       Tp->Next[i]               = -1;
-      Tp->MinID[i]              = Tp->P[i].ID;
-      Tp->MinIDTask[i]          = ThisTask;
+      Tp->MinID[i].set(id++);  // we use new IDs here instead of P[].ID to make sure that also for lightcone group finding MinID is
+                               // unique for all box replicas
+      Tp->MinIDTask[i] = ThisTask;
 
 #if defined(LIGHTCONE_PARTICLES_GROUPS)
       Tp->DistanceOrigin[i] = fof_distance_to_origin(i);
@@ -276,8 +297,8 @@ void fof<partset>::fof_fof(int num, const char *grpcat_basename, const char *grp
     {
       TIMER_STOP(CPU_FOF);
 
-      char catname[1000];
-      sprintf(catname, "%s_subhalo_tab", grpcat_basename);
+      char catname[MAXLEN_PATH_EXTRA];
+      snprintf(catname, MAXLEN_PATH_EXTRA, "%s_subhalo_tab", grpcat_basename);
 
       subfind_find_subhalos(num, catname, grpcat_dirbasename);
 
@@ -293,8 +314,8 @@ void fof<partset>::fof_fof(int num, const char *grpcat_basename, const char *grp
 
       fof_io<partset> FoF_IO{this, this->Communicator, All.SnapFormat};
 
-      char catname[1000];
-      sprintf(catname, "%s_tab", grpcat_basename);
+      char catname[MAXLEN_PATH_EXTRA];
+      snprintf(catname, MAXLEN_PATH_EXTRA, "%s_tab", grpcat_basename);
 
       FoF_IO.fof_subfind_save_groups(num, catname, grpcat_dirbasename);
 
@@ -542,7 +563,12 @@ double fof<partset>::fof_get_comoving_linking_length(void)
       }
   sumup_large_ints(1, &ndm, &ndmtot, Communicator);
   MPI_Allreduce(&mass, &masstot, 1, MPI_DOUBLE, MPI_SUM, Communicator);
-  double rhodm = (All.Omega0 - All.OmegaBaryon) * 3 * All.Hubble * All.Hubble / (8 * M_PI * All.G);
+
+  double rhodm;
+  if(Tp->TotNumGas > 0)
+    rhodm = (All.Omega0 - All.OmegaBaryon) * 3 * All.Hubble * All.Hubble / (8 * M_PI * All.G);
+  else
+    rhodm = All.Omega0 * 3 * All.Hubble * All.Hubble / (8 * M_PI * All.G);
 
   return FOF_LINKLENGTH * pow(masstot / ndmtot / rhodm, 1.0 / 3);
 }
@@ -621,7 +647,7 @@ void fof<partset>::fof_compile_catalogue(double inner_distance)
     Send_count[FOF_GList[i].MinIDTask]++;
 
   /* inform everybody about how much they have to receive */
-  MPI_Alltoall(Send_count, 1, MPI_INT, Recv_count, 1, MPI_INT, Communicator);
+  myMPI_Alltoall(Send_count, 1, MPI_INT, Recv_count, 1, MPI_INT, Communicator);
 
   /* count how many we get and prepare offset tables */
   int nimport    = 0;
@@ -652,9 +678,9 @@ void fof<partset>::fof_compile_catalogue(double inner_distance)
           if(Send_count[recvTask] > 0 || Recv_count[recvTask] > 0)
             {
               /* get the group info */
-              MPI_Sendrecv(&FOF_GList[Send_offset[recvTask]], Send_count[recvTask] * sizeof(fof_group_list), MPI_BYTE, recvTask,
-                           TAG_DENS_A, &get_FOF_GList[Recv_offset[recvTask]], Recv_count[recvTask] * sizeof(fof_group_list), MPI_BYTE,
-                           recvTask, TAG_DENS_A, Communicator, MPI_STATUS_IGNORE);
+              myMPI_Sendrecv(&FOF_GList[Send_offset[recvTask]], Send_count[recvTask] * sizeof(fof_group_list), MPI_BYTE, recvTask,
+                             TAG_DENS_A, &get_FOF_GList[Recv_offset[recvTask]], Recv_count[recvTask] * sizeof(fof_group_list),
+                             MPI_BYTE, recvTask, TAG_DENS_A, Communicator, MPI_STATUS_IGNORE);
             }
         }
     }
@@ -728,9 +754,9 @@ void fof<partset>::fof_compile_catalogue(double inner_distance)
           if(Send_count[recvTask] > 0 || Recv_count[recvTask] > 0)
             {
               /* get the group info */
-              MPI_Sendrecv(&get_FOF_GList[Recv_offset[recvTask]], Recv_count[recvTask] * sizeof(fof_group_list), MPI_BYTE, recvTask,
-                           TAG_DENS_A, &FOF_GList[Send_offset[recvTask]], Send_count[recvTask] * sizeof(fof_group_list), MPI_BYTE,
-                           recvTask, TAG_DENS_A, Communicator, MPI_STATUS_IGNORE);
+              myMPI_Sendrecv(&get_FOF_GList[Recv_offset[recvTask]], Recv_count[recvTask] * sizeof(fof_group_list), MPI_BYTE, recvTask,
+                             TAG_DENS_A, &FOF_GList[Send_offset[recvTask]], Send_count[recvTask] * sizeof(fof_group_list), MPI_BYTE,
+                             recvTask, TAG_DENS_A, Communicator, MPI_STATUS_IGNORE);
             }
         }
     }
@@ -890,7 +916,7 @@ void fof<partset>::fof_assign_group_offset(void)
 {
   /* Tell everybody, how many particles the groups stored by each processor contain */
 
-  int gtype_loc[NTYPES]; /* particles of each type associated with locally stored groups */
+  long long gtype_loc[NTYPES]; /* particles of each type associated with locally stored groups */
   long long gtype_previous[NTYPES];
 
   for(int i = 0; i < NTYPES; i++)
@@ -900,8 +926,8 @@ void fof<partset>::fof_assign_group_offset(void)
     for(int j = 0; j < NTYPES; j++)
       gtype_loc[j] += Group[i].LenType[j];
 
-  int *gtype_all = (int *)Mem.mymalloc("gtype_all", NTYPES * NTask * sizeof(int));
-  MPI_Allgather(gtype_loc, NTYPES, MPI_INT, gtype_all, NTYPES, MPI_INT, Communicator);
+  long long *gtype_all = (long long *)Mem.mymalloc("gtype_all", NTYPES * NTask * sizeof(long long));
+  MPI_Allgather(gtype_loc, NTYPES, MPI_LONG_LONG_INT, gtype_all, NTYPES, MPI_LONG_LONG_INT, Communicator);
 
   for(int i = 0; i < NTYPES; i++)
     gtype_previous[i] = 0;
@@ -999,7 +1025,7 @@ void fof<partset>::fof_add_in_properties_of_group_segments(void)
   for(int i = 0; i < NgroupsExt; i++)
     Send_count[Group[i].MinIDTask]++;
 
-  MPI_Alltoall(Send_count, 1, MPI_INT, Recv_count, 1, MPI_INT, Communicator);
+  myMPI_Alltoall(Send_count, 1, MPI_INT, Recv_count, 1, MPI_INT, Communicator);
 
   int nimport    = 0;
   Recv_offset[0] = 0, Send_offset[0] = 0;
@@ -1028,9 +1054,9 @@ void fof<partset>::fof_add_in_properties_of_group_segments(void)
           if(Send_count[recvTask] > 0 || Recv_count[recvTask] > 0)
             {
               /* get the group data */
-              MPI_Sendrecv(&Group[Send_offset[recvTask]], Send_count[recvTask] * sizeof(group_properties), MPI_BYTE, recvTask,
-                           TAG_DENS_A, &get_Group[Recv_offset[recvTask]], Recv_count[recvTask] * sizeof(group_properties), MPI_BYTE,
-                           recvTask, TAG_DENS_A, Communicator, MPI_STATUS_IGNORE);
+              myMPI_Sendrecv(&Group[Send_offset[recvTask]], Send_count[recvTask] * sizeof(group_properties), MPI_BYTE, recvTask,
+                             TAG_DENS_A, &get_Group[Recv_offset[recvTask]], Recv_count[recvTask] * sizeof(group_properties), MPI_BYTE,
+                             recvTask, TAG_DENS_A, Communicator, MPI_STATUS_IGNORE);
             }
         }
     }

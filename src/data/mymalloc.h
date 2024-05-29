@@ -12,6 +12,8 @@
 #ifndef MYMALLOC_H
 #define MYMALLOC_H
 
+#include "gadgetconfig.h"
+
 #include <stdio.h>
 
 #define CACHELINESIZE 64
@@ -64,6 +66,9 @@ class memory : public setcomm
   void report_detailed_memory_usage_of_largest_task(void);
 
   void check_maxmemsize_setting(int maxmemsize);
+
+  int myMPI_Win_allocate_shared(MPI_Aint size, int disp_unit, MPI_Info info, MPI_Comm comm, void *baseptr, MPI_Win *win);
+  int myMPI_Win_shared_query(MPI_Win win, int rank, MPI_Aint *size, int *disp_unit, void *baseptr);
 
   inline double getAllocatedBytesInMB(void) { return AllocatedBytes * TO_MBYTE_FAC; }
 
@@ -130,7 +135,9 @@ class memory : public setcomm
                                          has occurred on this task */
   enum restart_options RestartFlag;
 
-  int dump_memory_table_buffer(char *p);
+  int highmark_bufsize;
+
+  int dump_memory_table_buffer(char *p, int bufsize);
 
   void report_memory_usage(int rank, char *tabbuf);
 };

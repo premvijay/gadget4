@@ -378,7 +378,7 @@ void pm_periodic::pmforce_zoom_optimized_prepare_density(int mode, int *typelist
   rhogrid = (fft_real *)Mem.mymalloc_clear("rhogrid", maxfftsize * sizeof(fft_real));
 
   /* exchange data and add contributions to the local mesh-path */
-  MPI_Alltoall(localfield_sendcount, sizeof(size_t), MPI_BYTE, localfield_recvcount, sizeof(size_t), MPI_BYTE, Communicator);
+  myMPI_Alltoall(localfield_sendcount, sizeof(size_t), MPI_BYTE, localfield_recvcount, sizeof(size_t), MPI_BYTE, Communicator);
 
   for(level = 0; level < (1 << PTask); level++) /* note: for level=0, target is the same task */
     {
@@ -730,7 +730,7 @@ void pm_periodic::pmforce_uniform_optimized_prepare_density(int mode, int *typel
 
       if(rep == 0)
         {
-          MPI_Alltoall(Sndpm_count, sizeof(size_t), MPI_BYTE, Rcvpm_count, sizeof(size_t), MPI_BYTE, Communicator);
+          myMPI_Alltoall(Sndpm_count, sizeof(size_t), MPI_BYTE, Rcvpm_count, sizeof(size_t), MPI_BYTE, Communicator);
 
           nimport = 0, nexport = 0, Rcvpm_offset[0] = 0, Sndpm_offset[0] = 0;
           for(int j = 0; j < NTask; j++)
@@ -1186,7 +1186,7 @@ void pm_periodic::pmforce_uniform_optimized_readout_forces_or_potential_xz(fft_r
     MyIntPosType IntPos[3];
   };
 
-  partbuf *partin, *partout;
+  partbuf *partin = NULL, *partout = NULL;
   size_t nimport = 0, nexport = 0;
 
   particle_data *P = Sp->P;
@@ -1290,7 +1290,7 @@ void pm_periodic::pmforce_uniform_optimized_readout_forces_or_potential_xz(fft_r
 
       if(rep == 0)
         {
-          MPI_Alltoall(send_count, sizeof(size_t), MPI_BYTE, recv_count, sizeof(size_t), MPI_BYTE, Communicator);
+          myMPI_Alltoall(send_count, sizeof(size_t), MPI_BYTE, recv_count, sizeof(size_t), MPI_BYTE, Communicator);
 
           nimport = 0, nexport = 0;
           recv_offset[0] = send_offset[0] = 0;
@@ -1493,7 +1493,7 @@ void pm_periodic::pmforce_uniform_optimized_readout_forces_or_potential_zy(fft_r
     MyIntPosType IntPos[3];
   };
 
-  partbuf *partin, *partout;
+  partbuf *partin = NULL, *partout = NULL;
   size_t nimport = 0, nexport = 0;
 
   particle_data *P = Sp->P;
@@ -1597,7 +1597,7 @@ void pm_periodic::pmforce_uniform_optimized_readout_forces_or_potential_zy(fft_r
 
       if(rep == 0)
         {
-          MPI_Alltoall(send_count, sizeof(size_t), MPI_BYTE, recv_count, sizeof(size_t), MPI_BYTE, Communicator);
+          myMPI_Alltoall(send_count, sizeof(size_t), MPI_BYTE, recv_count, sizeof(size_t), MPI_BYTE, Communicator);
 
           nimport = 0, nexport = 0;
           recv_offset[0] = send_offset[0] = 0;
@@ -2328,9 +2328,6 @@ double pm_periodic::pmperiodic_tallbox_long_range_potential(double x, double y, 
 
   double r = sqrt(x * x + y * y + z * z);
 
-  if(r == 0)
-    return 0;
-
   double xx, yy, zz;
   switch(GRAVITY_TALLBOX)
     {
@@ -2370,11 +2367,24 @@ double pm_periodic::pmperiodic_tallbox_long_range_potential(double x, double y, 
   for(int nx = -qxmax; nx <= qxmax; nx++)
     for(int ny = -qymax; ny <= qymax; ny++)
       {
-        double dx = x - nx * BOXX;
-        double dy = y - ny * BOXY;
-        double r  = sqrt(dx * dx + dy * dy + z * z);
-        if(r > 0)
-          sum1 += erfc(alpha * r) / r;
+        if(nx != 0 || ny != 0)
+          {
+            double dx = x - nx * BOXX;
+            double dy = y - ny * BOXY;
+            double r  = sqrt(dx * dx + dy * dy + z * z);
+            if(r > 0)
+              sum1 += erfc(alpha * r) / r;
+          }
+        else
+          {
+            // in the nx/ny=0 case, correct for the short range force
+            double alpha_star = 0.5 / (((double)ASMTH) / PMGRID);
+            double u          = alpha_star * r;
+            if(r > 0)
+              sum1 += (erfc(alpha * r) - erfc(u)) / r;
+            else
+              sum1 += 2.0 / sqrt(M_PI) * (alpha_star - alpha);
+          }
       }
 
   double alpha2 = alpha * alpha;
@@ -2452,11 +2462,11 @@ void pm_periodic::calculate_power_spectra(int num)
   if(ThisTask == 0)
     {
       char buf[MAXLEN_PATH_EXTRA];
-      sprintf(buf, "%s/powerspecs", All.OutputDir);
+      snprintf(buf, MAXLEN_PATH_EXTRA, "%s/powerspecs", All.OutputDir);
       mkdir(buf, 02755);
     }
 
-  sprintf(power_spec_fname, "%s/powerspecs/powerspec_%03d.txt", All.OutputDir, num);
+  snprintf(power_spec_fname, MAXLEN_PATH_EXTRA, "%s/powerspecs/powerspec_%03d.txt", All.OutputDir, num);
 
   pmforce_do_powerspec(typeflag); /* calculate power spectrum for all particle types */
 
@@ -2476,7 +2486,7 @@ void pm_periodic::calculate_power_spectra(int num)
 
             typeflag[i] = 1;
 
-            sprintf(power_spec_fname, "%s/powerspecs/powerspec_type%d_%03d.txt", All.OutputDir, i, num);
+            snprintf(power_spec_fname, MAXLEN_PATH_EXTRA, "%s/powerspecs/powerspec_type%d_%03d.txt", All.OutputDir, i, num);
 
             pmforce_do_powerspec(typeflag); /* calculate power spectrum for type i */
           }

@@ -171,6 +171,18 @@ class snap_io : public IO_Def
         for(int k = 0; k < 3; k++)
           thisobj->Ptmp[particle].Pos[k] = in_buffer[k];
 
+#if defined(NGENIC) && !defined(CREATE_GRID)  // This is meant to become active when a glass file is used for IC creation
+        if(All.RestartFlag == RST_BEGIN || All.RestartFlag == RST_CREATEICS)
+          {
+            double fac = All.BoxSize / thisobj->header.BoxSize;
+#ifdef TILING
+            fac /= TILING;
+#endif
+            for(int k = 0; k < 3; k++)
+              thisobj->Ptmp[particle].Pos[k] *= fac;  // scale the glass file to the right size
+          }
+#endif
+
 #ifdef SQUASH_TEST
         thisobj->Ptmp[particle].Pos[1] *= 1.0 / 4;
         thisobj->Ptmp[particle].Pos[2] *= 1.0 / 16;
@@ -212,7 +224,8 @@ class snap_io : public IO_Def
             out_buffer[k] = thisobj->Sp->P[particle].Vel[k];
 
             /* we are using p = a^2 * xdot internally as velocity unit. Convert to legacy Gadget velocity units */
-            out_buffer[k] *= sqrt(All.cf_a3inv);
+            if(All.RestartFlag != RST_CONVERTSNAP)
+              out_buffer[k] *= sqrt(All.cf_a3inv);
           }
       }
     else

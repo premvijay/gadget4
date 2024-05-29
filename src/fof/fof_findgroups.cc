@@ -404,7 +404,7 @@ int foftree<partset>::treefind_fof_primary(MyIntPosType *searchcenter, MyNgbTree
             {
               fofnode *current = get_nodep(no, shmrank);
 
-              if(current->level == 0)
+              if(current->level <= LEVEL_ALWAYS_OPEN)
                 {
                   /* we always open the root node (its full node length couldn't be stored in the integer type */
                   no      = current->nextnode; /* no change in shmrank expected here */
@@ -426,7 +426,7 @@ int foftree<partset>::treefind_fof_primary(MyIntPosType *searchcenter, MyNgbTree
                         if(Tp->MinID[head].get() <= target_MinID.get())
                           {
 #if defined(LIGHTCONE_PARTICLES_GROUPS)
-                            if(Tp->DistanceOrigin[FullyLinkedNodePIndex[no]] <= target_DistanceOrigin)
+                            if(Tp->DistanceOrigin[head] <= target_DistanceOrigin)
 #endif
                               {
                                 no      = current->sibling; /* the node can be discarded */

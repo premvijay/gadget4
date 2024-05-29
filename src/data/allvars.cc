@@ -9,9 +9,12 @@
  *  \brief instance and code for an object dealing with global parameters and variables
  */
 
+// clang-format off
 #include "gadgetconfig.h"
+// clang-format on
 
 #include "../data/allvars.h"
+
 #include "../data/constants.h"
 #include "../data/dtypes.h"
 #include "../data/macros.h"
@@ -113,22 +116,22 @@ void global_data_all_processes::register_parameters(void)
 
   for(int i = 0; i < NSOFTCLASSES; i++)
     {
-      char buf_l[100];
-      sprintf(buf_l, "SofteningComovingClass%d", i);
+      char buf_l[MAXLEN_PARAM_TAG];
+      snprintf(buf_l, MAXLEN_PARAM_TAG, "SofteningComovingClass%d", i);
       add_param(buf_l, &SofteningComoving[i], PARAM_DOUBLE, PARAM_FIXED);
     }
 
   for(int i = 0; i < NSOFTCLASSES; i++)
     {
-      char buf_l[100];
-      sprintf(buf_l, "SofteningMaxPhysClass%d", i);
+      char buf_l[MAXLEN_PARAM_TAG];
+      snprintf(buf_l, MAXLEN_PARAM_TAG, "SofteningMaxPhysClass%d", i);
       add_param(buf_l, &SofteningMaxPhys[i], PARAM_DOUBLE, PARAM_FIXED);
     }
 
   for(int i = 0; i < NTYPES; i++)
     {
-      char buf_l[100];
-      sprintf(buf_l, "SofteningClassOfPartType%d", i);
+      char buf_l[MAXLEN_PARAM_TAG];
+      snprintf(buf_l, MAXLEN_PARAM_TAG, "SofteningClassOfPartType%d", i);
       add_param(buf_l, &SofteningClassOfPartType[i], PARAM_INT, PARAM_FIXED);
     }
 
@@ -152,6 +155,9 @@ void global_data_all_processes::register_parameters(void)
 
 #ifdef LIGHTCONE_PARTICLES
   add_param("LightConeDefinitionFile", LightConeDefinitionFile, PARAM_STRING, PARAM_CHANGEABLE);
+#ifdef LIGHTCONE_MULTIPLE_ORIGINS
+  add_param("LightConeOriginsFile", LightConeOriginsFile, PARAM_STRING, PARAM_CHANGEABLE);
+#endif
 #endif
 
 #ifdef LIGHTCONE_MASSMAPS
@@ -246,6 +252,32 @@ void global_data_all_processes::read_outputlist(char *fname)
       fclose(fd);
 
       mpi_printf("\nfound %d times in output-list.\n", OutputListLength);
+
+#ifndef OUTPUT_NON_SYNCHRONIZED_ALLOWED
+      // now test that the output spacing is not smaller than the maximum timestep
+      if(OutputListLength > 1)
+        {
+          double dtmin = 0;
+          for(int i = 0; i < OutputListLength - 1; i++)
+            {
+              double dt;
+              if(All.ComovingIntegrationOn)
+                dt = log(OutputListTimes[i + 1]) - log(OutputListTimes[i]);
+              else
+                dt = OutputListTimes[i + 1] - OutputListTimes[i];
+
+              if(i == 0)
+                dtmin = dt;
+              else
+                dtmin = std::min<double>(dt, dtmin);
+            }
+          if(dtmin < All.MaxSizeTimestep)
+            Terminate(
+                "\nMinimal spacing in desired output list is dlna/dt = %g, which is smaller than MaxSizeTimestep=%g - this could lead "
+                "to missing outputs, which you probably don't want. Better to correct this.\n",
+                dtmin, All.MaxSizeTimestep);
+        }
+#endif
     }
 
   /* tell all other processes */

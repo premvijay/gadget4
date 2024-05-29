@@ -9,6 +9,8 @@
  *  \brief implements code for the shared-memory fetching of remote date through  designated MPI handler ranks
  */
 
+#include "gadgetconfig.h"
+
 #include <hdf5.h>
 #include <mpi.h>
 #include <stdio.h>
@@ -87,6 +89,9 @@ void shmem::shared_memory_handler(void)
           prepare_offset_table(NULL, tree_info[handle].SphP_offsets);
           prepare_offset_table(NULL, tree_info[handle].Foreign_Nodes_offsets);
           prepare_offset_table(NULL, tree_info[handle].Foreign_Points_offsets);
+
+          MPI_Barrier(SharedMemComm);  // this barrier is in principle superfluous, but on some systems,
+                                       // the MPI_Gather in prepare_offset_table() can return prematurely before all data has arrived
         }
       else if(tag == TAG_HEADER)  // signals that we are freeing addresses we stored for tree access
         {

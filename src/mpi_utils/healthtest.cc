@@ -141,14 +141,14 @@ double sim::measure_cpu_performance(MPI_Comm Communicator)
       MPI_Bcast(name_maxnode, MPI_MAX_PROCESSOR_NAME, MPI_CHAR, max_time.rank, Communicator);
 
       char buf[1000 + MPI_MAX_PROCESSOR_NAME];
-      sprintf(buf, "processes_%s.txt", name_maxnode);
+      snprintf(buf, 1000 + MPI_MAX_PROCESSOR_NAME, "processes_%s.txt", name_maxnode);
 
       mpi_printf("HEALTHTEST: We are dumping a process list to the file '%s'\n", buf);
 
       if(ThisTask == max_time.rank)
         {
           char cmd[10000 + MPI_MAX_PROCESSOR_NAME];
-          sprintf(cmd, "ps -ef >& %s", buf);
+          snprintf(cmd, 10000 + MPI_MAX_PROCESSOR_NAME, "ps -ef >& %s", buf);
           system(cmd);
         }
 
@@ -194,8 +194,8 @@ double sim::measure_hyper_cube_speed(const char *tag, MPI_Comm Communicator)
       if(recvTask < loc_ntask)
         {
           double t0 = Logs.second();
-          MPI_Sendrecv(sendbuf, bytecount, MPI_BYTE, recvTask, TAG_DENS_A, recvbuf, bytecount, MPI_BYTE, recvTask, TAG_DENS_A,
-                       Communicator, MPI_STATUS_IGNORE);
+          myMPI_Sendrecv(sendbuf, bytecount, MPI_BYTE, recvTask, TAG_DENS_A, recvbuf, bytecount, MPI_BYTE, recvTask, TAG_DENS_A,
+                         Communicator, MPI_STATUS_IGNORE);
           double t1 = Logs.second();
 
           tall += Logs.timediff(t0, t1);

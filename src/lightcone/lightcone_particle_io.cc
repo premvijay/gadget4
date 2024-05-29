@@ -64,7 +64,7 @@ lightcone_particle_io::lightcone_particle_io(lcparticles *Lp_ptr, lightcone *Lig
   this->header_size  = sizeof(header);
   this->header_buf   = &header;
   this->type_of_file = FILE_IS_LIGHTCONE;
-  sprintf(this->info, "LIGHTCONE: writing particle lightcone data");
+  snprintf(this->info, MAXLEN_PATH, "LIGHTCONE: writing particle lightcone data");
 
   init_field("POS ", "Coordinates", MEM_MY_DOUBLE, FILE_MY_IO_FLOAT, READ_IF_PRESENT, 3, A_LC, NULL, io_func_pos, ALL_TYPES, 1, 1.,
              -1., 1., 0., 0., All.UnitLength_in_cm, true);
@@ -138,12 +138,12 @@ void lightcone_particle_io::lightcone_read(int num, int conenr)
 
   Lp->TotNumPart = 0;
 
-  char fname[2 * MAXLEN_PATH];
+  char fname[MAXLEN_PATH_EXTRA];
 
   if(All.NumFilesPerSnapshot > 1)
-    sprintf(fname, "%s/lightcone_%02d/conedir_%04d/%s_%04d", All.OutputDir, conenr, num, "conesnap", num);
+    snprintf(fname, MAXLEN_PATH_EXTRA, "%s/lightcone_%02d/conedir_%04d/%s_%04d", All.OutputDir, conenr, num, "conesnap", num);
   else
-    sprintf(fname, "%s/lightcone_%02d/%s_%04d", All.OutputDir, conenr, "conesnap", num);
+    snprintf(fname, MAXLEN_PATH_EXTRA, "%s/lightcone_%02d/%s_%04d", All.OutputDir, conenr, "conesnap", num);
 
   int num_files = find_files(fname, fname);
 
@@ -178,7 +178,7 @@ void lightcone_particle_io::lightcone_read(int num, int conenr)
 
 void lightcone_particle_io::lightcone_save(int num, int conenr, bool reordered_flag)
 {
-  char buf[3 * MAXLEN_PATH];
+  char buf[MAXLEN_PATH_EXTRA];
 
   cone         = conenr; /* note: cone is here a variable of the class, NOT a local variable */
   reorder_flag = reordered_flag;
@@ -228,33 +228,33 @@ void lightcone_particle_io::lightcone_save(int num, int conenr, bool reordered_f
 
   char lname[MAXLEN_PATH];
   if(reordered_flag)
-    sprintf(lname, "lightcone_treeorder");
+    snprintf(lname, MAXLEN_PATH, "lightcone_treeorder");
   else
-    sprintf(lname, "lightcone");
-
-  if(All.NumFilesPerSnapshot > 1)
-    {
-      if(ThisTask == 0)
-        {
-          char buf[3 * MAXLEN_PATH];
-          sprintf(buf, "%s/%s_%02d", All.OutputDir, lname, cone);
-          mkdir(buf, 02755);
-        }
-      MPI_Barrier(Communicator);
-    }
+    snprintf(lname, MAXLEN_PATH, "lightcone");
 
   if(ThisTask == 0)
     {
-      char buf[3 * MAXLEN_PATH];
-      sprintf(buf, "%s/%s_%02d/conedir_%04d", All.OutputDir, lname, cone, num);
+      char buf[MAXLEN_PATH_EXTRA];
+      snprintf(buf, MAXLEN_PATH_EXTRA, "%s/%s_%02d", All.OutputDir, lname, cone);
       mkdir(buf, 02755);
     }
   MPI_Barrier(Communicator);
 
   if(All.NumFilesPerSnapshot > 1)
-    sprintf(buf, "%s/%s_%02d/conedir_%04d/%s_%04d", All.OutputDir, lname, cone, num, "conesnap", num);
+    {
+      if(ThisTask == 0)
+        {
+          char buf[MAXLEN_PATH_EXTRA];
+          snprintf(buf, MAXLEN_PATH_EXTRA, "%s/%s_%02d/conedir_%04d", All.OutputDir, lname, cone, num);
+          mkdir(buf, 02755);
+        }
+      MPI_Barrier(Communicator);
+    }
+
+  if(All.NumFilesPerSnapshot > 1)
+    snprintf(buf, MAXLEN_PATH_EXTRA, "%s/%s_%02d/conedir_%04d/%s_%04d", All.OutputDir, lname, cone, num, "conesnap", num);
   else
-    sprintf(buf, "%s/%s_%02d/%s_%04d", All.OutputDir, lname, cone, "conesnap", num);
+    snprintf(buf, MAXLEN_PATH_EXTRA, "%s/%s_%02d/%s_%04d", All.OutputDir, lname, cone, "conesnap", num);
 
   write_multiple_files(buf, All.NumFilesPerSnapshot);
 
@@ -336,6 +336,12 @@ void lightcone_particle_io::fill_file_header(int writeTask, int lastTask, long l
     }
 
   header.num_files = All.NumFilesPerSnapshot;
+
+#ifdef LIGHTCONE_MULTIPLE_ORIGINS
+  int oindex = LightCone->Cones[cone].OriginIndex;
+  for(int n = 0; n < 3; n++)
+    header.Origin[n] = LightCone->ConeOrigins[oindex].PosOrigin[n];
+#endif
 }
 
 void lightcone_particle_io::write_header_fields(hid_t handle)
@@ -355,6 +361,10 @@ void lightcone_particle_io::write_header_fields(hid_t handle)
       write_scalar_attribute(handle, "Npix_ThisFile", &header.Npix, H5T_NATIVE_UINT32);
       write_scalar_attribute(handle, "Npix_Total", &header.TotNpix, H5T_NATIVE_UINT32);
     }
+
+#ifdef LIGHTCONE_MULTIPLE_ORIGINS
+  write_vector_attribute(handle, "Origin", header.Origin, H5T_NATIVE_DOUBLE, 3);
+#endif
 }
 
 void lightcone_particle_io::set_filenr_in_header(int numfiles) { header.num_files = numfiles; }
@@ -362,11 +372,11 @@ void lightcone_particle_io::set_filenr_in_header(int numfiles) { header.num_file
 void lightcone_particle_io::get_datagroup_name(int type, char *buf)
 {
   if(type < NTYPES)
-    sprintf(buf, "/PartType%d", type);
+    snprintf(buf, MAXLEN_PATH, "/PartType%d", type);
   else if(type == NTYPES)
-    sprintf(buf, "/TreeTable");
+    snprintf(buf, MAXLEN_PATH, "/TreeTable");
   else if(type == NTYPES + 1)
-    sprintf(buf, "/HealPixHashTable");
+    snprintf(buf, MAXLEN_PATH, "/HealPixHashTable");
   else
     Terminate("wrong group");
 }

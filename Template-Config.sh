@@ -161,8 +161,10 @@ INITIAL_CONDITIONS_CONTAIN_ENTROPY
 #LIGHTCONE_PARTICLES                          # produces particle lightcones
 #LIGHTCONE_MASSMAPS                           # produces mass shells on the lightcone
 #LIGHTCONE_PARTICLES_GROUPS                   # computes groups for particles buffered on the lightcone
+#LIGHTCONE_PARTICLES_SKIP_SAVING              # prevents that particle data is saved along with the found groups on the lightcone
 #LIGHTCONE_OUTPUT_ACCELERATIONS               # stores accelerations for particles on lightcone
 #LIGHTCONE_IMAGE_COMP_HSML_VELDISP            # option for computing densities and smoothing length for lightcones in postprocessing
+#LIGHTCONE_MULTIPLE_ORIGINS                   # switch this on if you want to be able to define lightcone origins different from (0,0,0)
 #REARRANGE_OPTION                             # special option to reorder lightcone data in mergertree order
 
 
@@ -195,7 +197,10 @@ INITIAL_CONDITIONS_CONTAIN_ENTROPY
 #USE_MPIALLTOALLV_IN_DOMAINDECOMP             # replaces hypercube communication in domain particle exchance with a single MPI_Allgatherv (can be less stable)
 #MPI_HYPERCUBE_ALLGATHERV                     # if your MPI-library uses too much internal storage for MPI_Allgatherv, this uses a hypercube as a work-around
 #MPI_MESSAGE_SIZELIMIT_IN_MB=200              # limit the message size of very large MPI transfers
+#MPI_HYPERCUBE_ALLTOALL                       # use a robust hyercube for MPI_Alltoall instead the native algorithm if the MPI library
 #ISEND_IRECV_IN_DOMAIN                        # uses asynchronous communication instead of synchronous communication in hypercube pattern (can be less stable)
+#ALLOCATE_SHARED_MEMORY_VIA_POSIX             # if this is set, do use POSIX directly to allocated shared memory instead of MPI-3 calls
+#OLDSTYLE_SHARED_MEMORY_ALLOCATION            # disables new memory allocation mechanism via memfd_create()
 
 
 #---------------------------------------- Testing and Debugging options

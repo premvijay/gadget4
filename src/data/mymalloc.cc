@@ -5,12 +5,19 @@
  *******************************************************************************/
 #include "gadgetconfig.h"
 
+#include <fcntl.h>
 #include <math.h>
 #include <mpi.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#if defined(__linux__) && !defined(OLDSTYLE_SHARED_MEMORY_ALLOCATION)
+#include <sys/mman.h>
+#endif
 
 #include "../data/allvars.h"
 #include "../data/dtypes.h"
@@ -63,8 +70,9 @@ void memory::mymalloc_init(int maxmemsize, enum restart_options restartflag)
   ParentFileName               = (char *)malloc(MAXBLOCKS * MAXCHARS * sizeof(char));
   FileName                     = (char *)malloc(MAXBLOCKS * MAXCHARS * sizeof(char));
   LineNumber                   = (int *)malloc(MAXBLOCKS * sizeof(int));
-  HighMarkTabBuf               = (char *)malloc((100 + 4 * MAXCHARS) * (MAXBLOCKS + 10));
-  HighMarkTabBufWithoutGeneric = (char *)malloc((100 + 4 * MAXCHARS) * (MAXBLOCKS + 10));
+  highmark_bufsize             = (100 + 4 * MAXCHARS) * (MAXBLOCKS + 10);
+  HighMarkTabBuf               = (char *)malloc(highmark_bufsize);
+  HighMarkTabBufWithoutGeneric = (char *)malloc(highmark_bufsize);
 
   memset(VarName, 0, MAXBLOCKS * MAXCHARS);
   memset(FunctionName, 0, MAXBLOCKS * MAXCHARS);
@@ -87,7 +95,7 @@ void memory::mymalloc_init(int maxmemsize, enum restart_options restartflag)
   MPI_Info_create(&win_info);
   MPI_Info_set(win_info, "alloc_shared_noncontig", "true");
 
-  if(MPI_Win_allocate_shared(n, 1, win_info, Shmem.SharedMemComm, &Base, &Shmem.SharedMemWin) != MPI_SUCCESS)
+  if(myMPI_Win_allocate_shared(n, 1, win_info, Shmem.SharedMemComm, &Base, &Shmem.SharedMemWin) != MPI_SUCCESS)
     Terminate("Failed to allocate memory for `Base' (%d Mbytes).\n", All.MaxMemSize);
 
   /* we now make sure that the allocated local buffer is really aligned, not all MPI libraries guarantee this */
@@ -124,9 +132,9 @@ void memory::mymalloc_init(int maxmemsize, enum restart_options restartflag)
   MPI_Bcast(All.OutputDir, sizeof(All.OutputDir), MPI_BYTE, 0, MPI_COMM_WORLD);
 
   if(Shmem.GhostRank == 0)
-    sprintf(buf, "%s%s", All.OutputDir, "memory.txt");
+    snprintf(buf, MAXLEN_PATH_EXTRA, "%s%s", All.OutputDir, "memory.txt");
   else
-    sprintf(buf, "%s%s", All.OutputDir, "memory_ghostranks.txt");
+    snprintf(buf, MAXLEN_PATH_EXTRA, "%s%s", All.OutputDir, "memory_ghostranks.txt");
 
   if(!(FdMemory = fopen(buf, mode)))
     Terminate("error in opening file '%s'\n", buf);
@@ -156,7 +164,7 @@ void memory::mymalloc_init(int maxmemsize, enum restart_options restartflag)
     {
       MPI_Aint size;
       int disp_unit;
-      MPI_Win_shared_query(Shmem.SharedMemWin, i, &size, &disp_unit, &Shmem.SharedMemBaseAddr[i]);
+      myMPI_Win_shared_query(Shmem.SharedMemWin, i, &size, &disp_unit, &Shmem.SharedMemBaseAddr[i]);
     }
 
   // now propagte the alignment correction also to the base addresses that all the other processes see
@@ -170,6 +178,163 @@ void memory::mymalloc_init(int maxmemsize, enum restart_options restartflag)
   Mem.myfree(off_list);
 }
 
+int memory::myMPI_Win_allocate_shared(MPI_Aint size, int disp_unit, MPI_Info info, MPI_Comm comm, void *baseptr, MPI_Win *win)
+{
+#ifdef OLDSTYLE_SHARED_MEMORY_ALLOCATION
+
+#ifndef ALLOCATE_SHARED_MEMORY_VIA_POSIX
+  return MPI_Win_allocate_shared(size, disp_unit, info, comm, baseptr, win);
+#else
+
+  char shmpath[NAME_MAX];
+
+  /* Base offsets of the other MPI ranks in our shared memory mapping */
+  Shmem.SharedMemBaseAddrRaw = (char **)malloc(Shmem.Island_NTask * sizeof(char *));
+
+  long long *size_list = (long long *)malloc(Shmem.Island_NTask * sizeof(long long));
+
+  long long loc_bytes = size;
+  MPI_Allgather(&loc_bytes, 1, MPI_LONG_LONG, size_list, 1, MPI_LONG_LONG, comm);
+
+  long long tot_bytes = 0;
+  for(int i = 0; i < Shmem.Island_NTask; i++)
+    tot_bytes += size_list[i];
+
+  if(Shmem.Island_ThisTask == 0)
+    {
+      snprintf(shmpath, NAME_MAX, "/G4-%lld.dat", (long long)getpid());
+
+      int fd = shm_open(shmpath, O_CREAT | O_EXCL | O_RDWR, S_IRUSR | S_IWUSR);
+      if(fd == -1)
+        Terminate("shm_open failed in creation");
+
+      if(ftruncate(fd, tot_bytes) == -1)
+        Terminate("ftruncate failed");
+
+      /* Map the object into the caller's address space. */
+
+      void *buf = mmap(NULL, tot_bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+      if(buf == MAP_FAILED)
+        Terminate("mmap failed");
+
+      Shmem.SharedMemBaseAddrRaw[0] = (char *)buf;
+    }
+
+  MPI_Bcast(shmpath, NAME_MAX, MPI_BYTE, 0, comm);
+
+  if(Shmem.Island_ThisTask != 0)
+    {
+      int fd = shm_open(shmpath, O_RDWR, 0);
+      if(fd == -1)
+        Terminate("shm open failed in access");
+
+      void *buf = mmap(NULL, tot_bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+      if(buf == MAP_FAILED)
+        Terminate("mmap failed");
+
+      Shmem.SharedMemBaseAddrRaw[0] = (char *)buf;
+    }
+
+  for(int i = 1; i < Shmem.Island_NTask; i++)
+    Shmem.SharedMemBaseAddrRaw[i] = (char *)Shmem.SharedMemBaseAddrRaw[i - 1] + size_list[i - 1];
+
+  char **p = (char **)baseptr;
+
+  *p = Shmem.SharedMemBaseAddrRaw[Shmem.Island_ThisTask];
+
+  free(size_list);
+
+  MPI_Barrier(comm);
+
+  if(Shmem.Island_ThisTask == 0)
+    shm_unlink(shmpath);
+
+  return MPI_SUCCESS;
+#endif
+
+#else
+
+  char shmpath[NAME_MAX];
+
+  /* Base offsets of the other MPI ranks in our shared memory mapping */
+  Shmem.SharedMemBaseAddrRaw = (char **)malloc(Shmem.Island_NTask * sizeof(char *));
+
+  long long *size_list = (long long *)malloc(Shmem.Island_NTask * sizeof(long long));
+
+  long long loc_bytes = size;
+  MPI_Allgather(&loc_bytes, 1, MPI_LONG_LONG, size_list, 1, MPI_LONG_LONG, comm);
+
+  long long tot_bytes = 0;
+  for(int i = 0; i < Shmem.Island_NTask; i++)
+    tot_bytes += size_list[i];
+
+  if(Shmem.Island_ThisTask == 0)
+    {
+      snprintf(shmpath, NAME_MAX, "Gadget4-%lld.dat", (long long)getpid());
+      int fd = memfd_create(shmpath, MFD_CLOEXEC);
+      snprintf(shmpath, NAME_MAX, "/proc/%lld/fd/%d", (long long)getpid(), fd);
+
+      if(fd == -1)
+        Terminate("memfd_create failed");
+
+      if(ftruncate(fd, tot_bytes) == -1)
+        Terminate("ftruncate of shared memory allocation failed");
+
+      /* Map the object into the caller's address space. */
+
+      void *buf = mmap(NULL, tot_bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+      if(buf == MAP_FAILED)
+        Terminate("mmap failed");
+
+      Shmem.SharedMemBaseAddrRaw[0] = (char *)buf;
+    }
+
+  MPI_Bcast(shmpath, NAME_MAX, MPI_BYTE, 0, comm);
+
+  if(Shmem.Island_ThisTask != 0)
+    {
+      int fd = open(shmpath, O_RDWR);
+      if(fd == -1)
+        Terminate("open failed in access");
+
+      void *buf = mmap(NULL, tot_bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+
+      if(buf == MAP_FAILED)
+        Terminate("mmap failed");
+
+      Shmem.SharedMemBaseAddrRaw[0] = (char *)buf;
+    }
+
+  for(int i = 1; i < Shmem.Island_NTask; i++)
+    Shmem.SharedMemBaseAddrRaw[i] = (char *)Shmem.SharedMemBaseAddrRaw[i - 1] + size_list[i - 1];
+
+  char **p = (char **)baseptr;
+
+  *p = Shmem.SharedMemBaseAddrRaw[Shmem.Island_ThisTask];
+
+  free(size_list);
+
+  MPI_Barrier(comm);
+
+  return MPI_SUCCESS;
+#endif
+}
+
+int memory::myMPI_Win_shared_query(MPI_Win win, int rank, MPI_Aint *size, int *disp_unit, void *baseptr)
+{
+#if defined(OLDSTYLE_SHARED_MEMORY_ALLOCATION) && !defined(ALLOCATE_SHARED_MEMORY_VIA_POSIX)
+  return MPI_Win_shared_query(win, rank, size, disp_unit, baseptr);
+#else
+
+  char **p = (char **)baseptr;
+
+  *p = Shmem.SharedMemBaseAddrRaw[rank];
+
+  return MPI_SUCCESS;
+#endif
+}
+
 void memory::report_memory_usage(int rank, char *tabbuf)
 {
   int thistask;
@@ -177,12 +342,14 @@ void memory::report_memory_usage(int rank, char *tabbuf)
 
   if(thistask == rank)
     {
-      char *buf = (char *)mymalloc("buf", (100 + 4 * MAXCHARS) * (Nblocks + 10));
-      int cc    = 0;
-      cc += sprintf(buf + cc, "\nMEMORY:  Largest Allocation = %g Mbyte  |  Largest Allocation Without Generic = %g Mbyte\n\n",
-                    OldGlobHighMarkMB, OldGlobHighMarkMBWithoutGeneric);
+      int bufsize = (100 + 4 * MAXCHARS) * (Nblocks + 10);
+      char *buf   = (char *)mymalloc("buf", bufsize);
+      int cc      = 0;
+      cc += snprintf(buf + cc, bufsize - cc,
+                     "\nMEMORY:  Largest Allocation = %g Mbyte  |  Largest Allocation Without Generic = %g Mbyte\n\n",
+                     OldGlobHighMarkMB, OldGlobHighMarkMBWithoutGeneric);
 
-      cc += sprintf(buf + cc, "%s", tabbuf);
+      cc += snprintf(buf + cc, bufsize - cc, "%s", tabbuf);
       if(thistask == 0)
         {
           if(RestartFlag == RST_BEGIN || RestartFlag == RST_RESUME || RestartFlag == RST_STARTFROMSNAP)
@@ -263,8 +430,9 @@ void memory::report_detailed_memory_usage_of_largest_task(void)
  */
 void memory::dump_memory_table(void)
 {
-  char *buf = (char *)malloc(200 * (Nblocks + 10));
-  dump_memory_table_buffer(buf);
+  int bufsize = 200 * (Nblocks + 10);
+  char *buf   = (char *)malloc(bufsize);
+  dump_memory_table_buffer(buf, bufsize);
   printf("%s", buf);
   free(buf);
 }
@@ -274,26 +442,26 @@ void memory::dump_memory_table(void)
  *  \param p output buffer
  *  \return the number of characters written to p
  */
-int memory::dump_memory_table_buffer(char *p)
+int memory::dump_memory_table_buffer(char *p, int bufsize)
 {
   int cc              = 0;
   size_t totBlocksize = 0;
   int thistask;
   MPI_Comm_rank(Communicator, &thistask);
 
-  cc +=
-      sprintf(p + cc, "-------------------------- Allocated Memory Blocks---- ( Step %8d )------------------\n", All.NumCurrentTiStep);
-  cc += sprintf(p + cc, "Task    Nr F                  Variable      MBytes   Cumulative  Function|File|Linenumber\n");
-  cc += sprintf(p + cc, "------------------------------------------------------------------------------------------\n");
+  cc += snprintf(p + cc, bufsize - cc, "-------------------------- Allocated Memory Blocks---- ( Step %8d )------------------\n",
+                 All.NumCurrentTiStep);
+  cc += snprintf(p + cc, bufsize - cc, "Task    Nr F                  Variable      MBytes   Cumulative  Function|File|Linenumber\n");
+  cc += snprintf(p + cc, bufsize - cc, "------------------------------------------------------------------------------------------\n");
   for(int i = 0; i < Nblocks; i++)
     {
       totBlocksize += BlockSize[i];
 
-      cc += sprintf(p + cc, "%4d %5d %d %40s  %10.4f   %10.4f  %s%s()|%s|%d\n", thistask, i, MovableFlag[i], VarName + i * MAXCHARS,
-                    BlockSize[i] * TO_MBYTE_FAC, totBlocksize * TO_MBYTE_FAC, ParentFileName + i * MAXCHARS,
-                    FunctionName + i * MAXCHARS, FileName + i * MAXCHARS, LineNumber[i]);
+      cc += snprintf(p + cc, bufsize - cc, "%4d %5d %d %40s  %10.4f   %10.4f  %s%s()|%s|%d\n", thistask, i, MovableFlag[i],
+                     VarName + i * MAXCHARS, BlockSize[i] * TO_MBYTE_FAC, totBlocksize * TO_MBYTE_FAC, ParentFileName + i * MAXCHARS,
+                     FunctionName + i * MAXCHARS, FileName + i * MAXCHARS, LineNumber[i]);
     }
-  cc += sprintf(p + cc, "------------------------------------------------------------------------------------------\n");
+  cc += snprintf(p + cc, bufsize - cc, "------------------------------------------------------------------------------------------\n");
 
   return cc;
 }
@@ -356,13 +524,13 @@ void *memory::mymalloc_movable_fullinfo(void *ptr, const char *varname, size_t n
   if(AllocatedBytes - AllocatedBytesGeneric > HighMarkBytesWithoutGeneric)
     {
       HighMarkBytesWithoutGeneric = AllocatedBytes - AllocatedBytesGeneric;
-      dump_memory_table_buffer(HighMarkTabBufWithoutGeneric);
+      dump_memory_table_buffer(HighMarkTabBufWithoutGeneric, highmark_bufsize);
     }
 
   if(AllocatedBytes > HighMarkBytes)
     {
       HighMarkBytes = AllocatedBytes;
-      dump_memory_table_buffer(HighMarkTabBuf);
+      dump_memory_table_buffer(HighMarkTabBuf, highmark_bufsize);
     }
 
   if(clear_flag)
@@ -584,11 +752,12 @@ void *memory::myrealloc_movable_fullinfo(void *p, size_t n, const char *func, co
   if(AllocatedBytes > HighMarkBytes)
     {
       HighMarkBytes = AllocatedBytes;
-      dump_memory_table_buffer(HighMarkTabBuf);
+      dump_memory_table_buffer(HighMarkTabBuf, highmark_bufsize);
     }
 
   return Table[nr];
 }
+
 
 void memory::check_maxmemsize_setting(int maxmemsize)
 {
@@ -606,6 +775,7 @@ void memory::check_maxmemsize_setting(int maxmemsize)
       fflush(stdout);
     }
 
+#ifdef OLDSTYLE_SHARED_MEMORY_ALLOCATION
   if(maxmemsize > (SharedMemoryOnNode / 1024.0 / TasksInThisNode) && RankInThisNode == 0)
     {
       char name[MPI_MAX_PROCESSOR_NAME];
@@ -619,9 +789,11 @@ void memory::check_maxmemsize_setting(int maxmemsize)
       errflag = 1;
       fflush(stdout);
     }
-
+#endif
+  
   MPI_Allreduce(&errflag, &errflag_tot, 1, MPI_INT, MPI_MAX, Communicator);
 
   if(errflag_tot)
     Terminate("At least one node has insufficient memory");
 }
+

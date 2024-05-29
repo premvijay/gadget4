@@ -12,6 +12,8 @@
 #ifndef GENERIC_COMM_H
 #define GENERIC_COMM_H
 
+#include "gadgetconfig.h"
+
 #include "../domain/domain.h"
 #include "../logs/logs.h"
 #include "../mpi_utils/mpi_utils.h"
@@ -104,7 +106,7 @@ class generic_comm
   node_info *NodeInfoIn;
   node_info *NodeInfoGet;
 
-  char callorigin[1000];
+  char callorigin[MAXLEN_PATH_EXTRA];
 
   void primary_loop(int mode)
   {
@@ -203,7 +205,7 @@ class generic_comm
       {
         Mem.dump_memory_table();
         Terminate("It seems we have too little space left for properly sized ExportSpace... (%lld %lld)   Need more memory.\n",
-                  (long long)ExportSpace, (long long)Tp->NumPart * sizeof(int))
+                  (long long)ExportSpace, (long long)Tp->NumPart * sizeof(int));
       }
 
     ExportSpace -= Tp->NumPart * sizeof(int); /* to account for the neighbor list buffer that the process allocated */
@@ -215,7 +217,7 @@ class generic_comm
     MinSpace = (D->NTask - 1) * (sizeof(data_partlist) + sizeof(T_in) + sizeof(T_out)) +
                D->NTopleaves * (sizeof(data_nodelist) + sizeof(int));
 
-    sprintf(callorigin, "%s|%d|", file, line);
+    snprintf(callorigin, MAXLEN_PATH_EXTRA, "%s|%d|", file, line);
 
     if(ExportSpace < MinSpace)
       {
@@ -293,7 +295,7 @@ class generic_comm
      * we have also two option experimental communication routines that use a sparse=communication pattern instead.
      */
     /* the default */
-    MPI_Alltoall(Send, sizeof(send_recv_counts), MPI_BYTE, Recv, sizeof(send_recv_counts), MPI_BYTE, D->Communicator);
+    myMPI_Alltoall(Send, sizeof(send_recv_counts), MPI_BYTE, Recv, sizeof(send_recv_counts), MPI_BYTE, D->Communicator);
   }
 
   /* initialize offset tables that we need for the communication
@@ -486,14 +488,14 @@ class generic_comm
                     size_t len = sizeof(T_in);
 
                     /* get the particles */
-                    MPI_Sendrecv(&DataIn[Send_offset[recvTask]], Send[recvTask].Count * len, MPI_BYTE, recvTask, TAG_HYDRO_A,
-                                 &DataGet[Nimport], Recv[recvTask].Count * len, MPI_BYTE, recvTask, TAG_HYDRO_A, D->Communicator,
-                                 MPI_STATUS_IGNORE);
+                    myMPI_Sendrecv(&DataIn[Send_offset[recvTask]], Send[recvTask].Count * len, MPI_BYTE, recvTask, TAG_HYDRO_A,
+                                   &DataGet[Nimport], Recv[recvTask].Count * len, MPI_BYTE, recvTask, TAG_HYDRO_A, D->Communicator,
+                                   MPI_STATUS_IGNORE);
 
                     /* get the node info */
-                    MPI_Sendrecv(&NodeInfoIn[Send_offset_nodes[recvTask]], Send[recvTask].CountNodes * sizeof(node_info), MPI_BYTE,
-                                 recvTask, TAG_GRAV_B, &NodeInfoGet[NimportNodes], Recv[recvTask].CountNodes * sizeof(node_info),
-                                 MPI_BYTE, recvTask, TAG_GRAV_B, D->Communicator, MPI_STATUS_IGNORE);
+                    myMPI_Sendrecv(&NodeInfoIn[Send_offset_nodes[recvTask]], Send[recvTask].CountNodes * sizeof(node_info), MPI_BYTE,
+                                   recvTask, TAG_GRAV_B, &NodeInfoGet[NimportNodes], Recv[recvTask].CountNodes * sizeof(node_info),
+                                   MPI_BYTE, recvTask, TAG_GRAV_B, D->Communicator, MPI_STATUS_IGNORE);
 
                     for(int k = 0; k < Recv[recvTask].Count; k++)
                       DataGet[Nimport + k].Firstnode += NimportNodes;
@@ -521,9 +523,9 @@ class generic_comm
                     size_t len = sizeof(T_out);
 
                     /* exchange the results */
-                    MPI_Sendrecv(&DataResult[Nimport], Recv[recvTask].Count * len, MPI_BYTE, recvTask, TAG_HYDRO_B,
-                                 &DataOut[Send_offset[recvTask]], Send[recvTask].Count * len, MPI_BYTE, recvTask, TAG_HYDRO_B,
-                                 D->Communicator, MPI_STATUS_IGNORE);
+                    myMPI_Sendrecv(&DataResult[Nimport], Recv[recvTask].Count * len, MPI_BYTE, recvTask, TAG_HYDRO_B,
+                                   &DataOut[Send_offset[recvTask]], Send[recvTask].Count * len, MPI_BYTE, recvTask, TAG_HYDRO_B,
+                                   D->Communicator, MPI_STATUS_IGNORE);
 
                     Nimport += Recv[recvTask].Count;
                     NimportNodes += Recv[recvTask].CountNodes;

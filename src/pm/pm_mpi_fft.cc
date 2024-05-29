@@ -588,7 +588,7 @@ void pm_mpi_fft::my_fft_swap13back(fft_plan *plan, fft_real *data, fft_real *out
 
 void pm_mpi_fft::my_column_based_fft(fft_plan *plan, void *data, void *workspace, int forward)
 {
-  size_t n;
+  long long n;
   fft_real *data_real = (fft_real *)data, *workspace_real = (fft_real *)workspace;
   fft_complex *data_complex = (fft_complex *)data, *workspace_complex = (fft_complex *)workspace;
 
@@ -732,7 +732,7 @@ void pm_mpi_fft::my_fft_column_remap(fft_complex *data, int Ndims[3], /* global 
 
   if(just_count_flag)
     {
-      MPI_Alltoall(count_send, sizeof(size_t), MPI_BYTE, count_recv, sizeof(size_t), MPI_BYTE, Communicator);
+      myMPI_Alltoall(count_send, sizeof(size_t), MPI_BYTE, count_recv, sizeof(size_t), MPI_BYTE, Communicator);
 
       for(j = 0, nimport = 0, nexport = 0, offset_send[0] = 0, offset_recv[0] = 0; j < NTask; j++)
         {
@@ -1200,7 +1200,7 @@ void pm_mpi_fft::my_fft_column_transpose(fft_real *data, int Ndims[3], /* global
         }
     }
   if(just_count_flag)
-    MPI_Alltoall(count_send, sizeof(size_t), MPI_BYTE, count_recv, sizeof(size_t), MPI_BYTE, Communicator);
+    myMPI_Alltoall(count_send, sizeof(size_t), MPI_BYTE, count_recv, sizeof(size_t), MPI_BYTE, Communicator);
 }
 
 #endif

@@ -9,7 +9,9 @@
  *  \brief contains the basic simulation loop that iterates over timesteps
  */
 
+// clang-format off
 #include "gadgetconfig.h"
+// clang-format on
 
 #include <ctype.h>
 #include <math.h>
@@ -84,8 +86,7 @@ void sim::run(void)
 
 #ifdef LIGHTCONE
 #ifdef LIGHTCONE_PARTICLES
-      mpi_printf("LIGHTCONE_PARTICLES: Lp.NumPart=%d   Checked %d box replicas out of list of length %d\n", Lp.NumPart,
-                 LightCone.NumLastCheck, LightCone.NumBoxes);
+      mpi_printf("LIGHTCONE_PARTICLES: Lp.NumPart=%d\n", Lp.NumPart);
 #endif
 #ifdef LIGHTCONE_MASSMAPS
       mpi_printf("LIGHTCONE_MASSMAPS:  Mp.NumPart=%d \n", Mp.NumPart);
@@ -168,7 +169,7 @@ void sim::run(void)
       Logs.log_debug_md5("AFTER SNAP");
 #endif
 
-      if(All.Ti_Current >= TIMEBASE) /* did we reached the final time? */
+      if(All.Ti_Current >= TIMEBASE || All.Time > All.TimeMax) /* did we reached the final time? */
         {
           mpi_printf("\nFinal time=%g reached. Simulation ends.\n", All.TimeMax);
 
@@ -274,7 +275,7 @@ int sim::check_for_interruption_of_run(void)
       FILE *fd;
       char stopfname[MAXLEN_PATH_EXTRA];
 
-      sprintf(stopfname, "%sstop", All.OutputDir);
+      snprintf(stopfname, MAXLEN_PATH_EXTRA, "%sstop", All.OutputDir);
       if((fd = fopen(stopfname, "r"))) /* Is the stop-file present? If yes, interrupt the run. */
         {
           fclose(fd);
@@ -283,7 +284,7 @@ int sim::check_for_interruption_of_run(void)
           unlink(stopfname);
         }
 
-      sprintf(stopfname, "%srestart", All.OutputDir);
+      snprintf(stopfname, MAXLEN_PATH_EXTRA, "%srestart", All.OutputDir);
       if((fd = fopen(stopfname, "r"))) /* Is the restart-file present? If yes, write a user-requested restart file. */
         {
           fclose(fd);
@@ -314,7 +315,7 @@ int sim::check_for_interruption_of_run(void)
         {
           FILE *fd;
           char contfname[MAXLEN_PATH_EXTRA];
-          sprintf(contfname, "%scont", All.OutputDir);
+          snprintf(contfname, MAXLEN_PATH_EXTRA, "%scont", All.OutputDir);
           if((fd = fopen(contfname, "w")))
             fclose(fd);
         }
@@ -703,8 +704,10 @@ void sim::create_snapshot_if_desired(void)
             mycxxsort_parallel(Lp.P, Lp.P + Lp.NumPart, Lp.compare_ipnest, Communicator);
 #endif
 
+#if !defined(LIGHTCONE_PARTICLES_SKIP_SAVING)
             for(int conenr = 0; conenr < LightCone.Nlightcones; conenr++)
               Lcone.lightcone_save(All.LightconeFileCount, conenr, false);
+#endif
 
             mpi_printf("LIGHTCONE: done with writing files.\n");
 

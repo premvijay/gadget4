@@ -404,9 +404,11 @@ expensive.
 
 This can be used to override the maximum radius out to which the
 short-range tree-force is evaluated in case the TreePM/FMM-PM
-algorithm is used. The default value is 4.5, given in
-mesh-cells. Going much beyond 6 should not yield further improvements
-in the way the force matching region is treated.
+algorithm is used. The conservative default value is 7.0 for this
+parameter, given in mesh-cells. Going much beyond 6.0 does however
+not yield much further improvement in the way the force matching region
+is treated, and reducing this value to 4.5 will give higher performance
+while being typically sufficiently accurate for most applications.
 
 -------
 
@@ -1231,11 +1233,29 @@ lightcone particle data before they are written to disk. Requires the
 
 -------
 
+**LIGHTCONE_PARTICLES_SKIP_SAVING**
+
+In case `LIGHTCONE_PARTICLES_GROUPS` is used, this option can be used to
+avoid that actual particle data is saved along with the groups that are
+found. 
+
+-------
+
 **LIGHTCONE_IMAGE_COMP_HSML_VELDISP**
 
 This special option is only relevant for lightcone image creation, and
 (re)computes adaptive smoothing lengths as well as local velocity
 dispersions.
+
+-------
+
+**LIGHTCONE_MULTIPLE_ORIGINS**
+
+If this is enabled, origins of lightcones different from (0, 0, 0) can 
+be defined. Possible origins need to be listed in a separate file with 
+the name `LightConeOriginsFile`. The light cone definitions file then needs
+be augmented with a further number at the end of each lightcone 
+definition, and this serves as an index into the list of lightcone origins.
 
 -------
 
@@ -1378,7 +1398,7 @@ course, is to increase the number of MPI ranks.
 
 This option can be used to replace the default communication pattern
 used in the domain decomposition (and also in FOF and SUBFIND) which
-is based on a hypercube with synchronous MPI_Sendrecv() calls, with a
+is based on a hypercube with synchronous myMPI_Sendrecv() calls, with a
 bunch of asynchronous communications. This should be faster in
 principle, but it also tends to result in a huge number of
 simultaneously open communication requests which can also choke the
@@ -1396,7 +1416,7 @@ function. This is done when this option is set, and one then
 effectively hopes that the internal algorithm used by Alltoallv is the
 most robust and fastest for the communication task at hand. This may
 be the case, but there is no guarantee for it. The default algorithm
-of GADGET-4 (hypercube with synchronous MPI_Sendrecv), which is used
+of GADGET-4 (hypercube with synchronous myMPI_Sendrecv), which is used
 when this option is not used, should always be a reliable alternative,
 however.
 
@@ -1408,9 +1428,33 @@ Another issue with some MPI-libraries is that they may use quite a bit
 of internal storage for carrying out MPI_Allgatherv. If this turns out
 to be a problem, one can set this option. The code will then replace all
 uses of MPI_Allgatherv() with a simpler communication pattern that
-uses hypercubes with MPI_Sendrecv as a work-around.
+uses hypercubes with myMPI_Sendrecv as a work-around.
 
 -------
+
+**MPI_HYPERCUBE_ALLTOALL**
+
+Some MPI libraries tend to be unstable for their myMPI_Alltoall. This is
+replacing this with a robust hypercube communication pattern. Not 
+necessarily the fastest, but very robust, scalable and with decent speed.
+
+-------
+
+**ALLOCATE_SHARED_MEMORY_VIA_POSIX**
+
+If this is set, try to use POSIX directly to allocated shared memory in 
+the virtual filesystem /dev/shm, instead of relying on the MPI-3 call
+MPI_Win_allocate_shared() which on some systems executes in a sluggish
+way.
+
+-------
+
+**OLDSTYLE_SHARED_MEMORY_ALLOCATION**
+
+When activated reverts to old style memory allocation instead of using memfd_create()
+
+-------
+
 
 Testing and Debugging options                                    {#tests}
 =============================

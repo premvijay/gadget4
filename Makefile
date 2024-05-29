@@ -94,7 +94,7 @@ $(info EXEC: $(EXEC))
 $(info )
 
 
-PYTHON   = /usr/bin/python
+PYTHON   = python
 
 RESULT     := $(shell CONFIG=$(CONFIG) PYTHON=$(PYTHON) BUILD_DIR=$(BUILD_DIR) SRC_DIR=$(SRC_DIR) CURDIR=$(CURDIR) make -f buildsystem/Makefile.config)
 $(info $(RESULT))
@@ -440,6 +440,12 @@ GSL_LIBS   += -lgsl -lgslcblas
 HDF5_LIBS  += -lhdf5 -lz
 MATH_LIBS  = -lm
 
+ifneq ($(SYSTYPE),"Darwin")
+ifeq (ALLOCATE_SHARED_MEMORY_VIA_POSIX,$(findstring ALLOCATE_SHARED_MEMORY_VIA_POSIX,$(CONFIGVARS)))
+SHMEM_LIBS  = -lrt
+endif
+endif
+
 MAKEFILES = $(MAKEFILE_LIST) buildsystem/Makefile.config
 
 ##########################
@@ -448,7 +454,7 @@ MAKEFILES = $(MAKEFILE_LIST) buildsystem/Makefile.config
 
 CFLAGS = $(OPTIMIZE) $(OPT) $(HDF5_INCL) $(GSL_INCL) $(FFTW_INCL) $(HWLOC_INCL) $(VTUNE_INCL) $(MAPS_INCL) -I$(BUILD_DIR) -I$(SRC_DIR)
 
-LIBS = $(MATH_LIBS) $(HDF5_LIBS) $(GSL_LIBS) $(FFTW_LIBS) $(HWLOC_LIBS) $(VTUNE_LIBS) $(TEST_LIBS) $(MAPS_LIBS)
+LIBS = $(MATH_LIBS) $(HDF5_LIBS) $(GSL_LIBS) $(FFTW_LIBS) $(HWLOC_LIBS) $(VTUNE_LIBS) $(TEST_LIBS) $(MAPS_LIBS) $(SHMEM_LIBS)
 
 
 SUBDIRS := $(addprefix $(BUILD_DIR)/,$(SUBDIRS))
@@ -501,6 +507,8 @@ $(BUILD_DIR)/compile_time_info.o: $(BUILD_DIR)/compile_time_info.cc $(MAKEFILES)
 $(BUILD_DIR)/compile_time_info_hdf5.o: $(BUILD_DIR)/compile_time_info_hdf5.cc $(MAKEFILES)
 	$(CPP) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/version.o: $(BUILD_DIR)/version.cc $(MAKEFILES)
+	$(CPP) $(CFLAGS) -c $< -o $@
 
 check: $(CONFIG_CHECK)
 
